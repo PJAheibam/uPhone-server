@@ -17,20 +17,21 @@ const client = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1,
 });
 
-function run() {
+async function run() {
   try {
-    const userCollection = client.db("uPhone").databaseName("users");
+    const userCollection = client.db("uPhone").collection("users");
 
     /************* USERS START *************/
     app.post("/users", async (req, res) => {
       const user = req.body;
       const query = { uid: user.uid };
-      const hasRecord = await userCollection.findOne(query);
 
-      console.log("user has record", hasRecord);
+      const hasRecord = await userCollection.find(query).toArray();
+
+      // console.log("hasRecord", hasRecord);
 
       if (user.role === "admin") res.sendStatus(406);
-      else if (hasRecord) {
+      else if (hasRecord.length > 0) {
         res.sendStatus(200);
       } else {
         const document = {
@@ -39,9 +40,8 @@ function run() {
           email: user.email,
           role: user.role,
         };
-        const response = await userCollection.updateOne(document);
 
-        console.log("Create user = ", response);
+        await userCollection.insertOne(document);
 
         res.sendStatus(201);
       }
