@@ -20,6 +20,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const userCollection = client.db("uPhone").collection("users");
+    const productCollection = client.db("uPhone").collection("products");
 
     /************* USERS START *************/
     app.post("/users", async (req, res) => {
@@ -47,6 +48,41 @@ async function run() {
       }
     });
     /************* USERS END *************/
+
+    /************* PRODUCTS START *************/
+    app.post("/products", verifyJWT, async (req, res) => {
+      const data = req.body;
+      if (!data.uid) return res.send(401);
+
+      try {
+        const user = await userCollection.find({ uid: data.uid }).toArray();
+        if (user[0].role === "admin" || user[0].role === "seller") {
+          const doc = {
+            name: data.productName,
+            images: data.images,
+            moreDetails: data.moreDetails,
+            sellingPrice: data.sellingPrice,
+            originalPrice: data.originalPrice,
+            meetUpLocation: data.meetUpLocation,
+            brand: data.brand,
+            brandId: data.brandId,
+            sellerEmail: data.email,
+            sellerId: data.uid,
+            status: "available",
+            advertise: false,
+          };
+          const response = await productCollection.insertOne(doc);
+          console.log("Line-71", response);
+          return res.send(response);
+        }
+        //if user is neither seller nor admin
+        return res.sendStatus(403);
+      } catch (error) {
+        console.error(error);
+        return res.sendStatus(400);
+      }
+    });
+    /************** PRODUCTS END **************/
   } finally {
   }
 }
@@ -68,6 +104,7 @@ app.post("/get-access-token", (req, res) => {
 
 function verifyJWT(req, res, next) {
   const authHeader = req.headers.authorization;
+  console.log(authHeader);
   const token = authHeader && authHeader.split(" ")[1];
   if (token === null) return res.sendStatus(401);
 
