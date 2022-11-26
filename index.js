@@ -50,6 +50,21 @@ async function run() {
     /************* USERS END *************/
 
     /************* PRODUCTS START *************/
+    app.get("/products", verifyJWT, async (req, res) => {
+      try {
+        const uid = req.query.uid;
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const products = await productCollection
+          .find({ sellerId: uid })
+          .toArray();
+
+        return res.send(products);
+      } catch (err) {
+        res.sendStatus(500); // Internal server error;
+      }
+    });
+
     app.post("/products", verifyJWT, async (req, res) => {
       const data = req.body;
       if (!data.uid) return res.send(401);
@@ -58,7 +73,7 @@ async function run() {
         const user = await userCollection.find({ uid: data.uid }).toArray();
         if (user[0].role === "admin" || user[0].role === "seller") {
           const doc = {
-            name: data.productName,
+            name: data.name,
             images: data.images,
             moreDetails: data.moreDetails,
             sellingPrice: data.sellingPrice,
@@ -70,6 +85,7 @@ async function run() {
             sellerId: data.uid,
             status: "available",
             advertise: false,
+            postedOn: data.postedOn,
           };
           const response = await productCollection.insertOne(doc);
           console.log("Line-71", response);
