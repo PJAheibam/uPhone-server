@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -19,22 +19,37 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    const brandCollection = client.db("uPhone").collection("brands");
     const userCollection = client.db("uPhone").collection("users");
     const productCollection = client.db("uPhone").collection("products");
 
+    /****************** BRANDS START ******************/
+
+    app.get("/brands", async (req, res) => {
+      try {
+        const brands = await brandCollection.find({}).toArray();
+
+        return res.send(brands);
+      } catch (err) {
+        console.log(err);
+        return req.sendStatus(500);
+      }
+    });
+
+    /******************* BRANDS END *******************/
+
     /************* USERS START *************/
     app.post("/users", async (req, res) => {
-      const user = req.body;
-      const query = { uid: user.uid };
+      try {
+        const user = req.body;
+        const query = { uid: user.uid };
 
-      const hasRecord = await userCollection.find(query).toArray();
+        const hasRecord = await userCollection.find(query).toArray();
 
-      // console.log("hasRecord", hasRecord);
+        if (user.role === "admin") return res.sendStatus(406);
 
-      if (user.role === "admin") res.sendStatus(406);
-      else if (hasRecord.length > 0) {
-        res.sendStatus(200);
-      } else {
+        if (hasRecord.length > 0) return res.sendStatus(200);
+        // console.log("hasRecord", hasRecord);
         const document = {
           uid: user.uid,
           fullName: user.fullName,
@@ -44,13 +59,45 @@ async function run() {
 
         await userCollection.insertOne(document);
 
-        res.sendStatus(201);
+        return res.sendStatus(201);
+      } catch (err) {
+        return res.sendStatus(500);
+      }
+    });
+
+    app.get("/user-role", verifyJWT, async (req, res) => {
+      try {
+        const uid = req.query.uid;
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const user = await userCollection.find({ uid }).toArray();
+
+        return res.send({ role: user[0].role });
+      } catch (error) {
+        return res.sendStatus(500);
       }
     });
     /************* USERS END *************/
 
     /************* PRODUCTS START *************/
-    app.get("/products", verifyJWT, async (req, res) => {
+    app.get("/products", async (req, res) => {
+      try {
+        const brandId = req.query.brandId;
+        let products = [];
+        if (brandId === "all") {
+          products = await productCollection.find({}).toArray();
+          return res.send(products);
+        }
+
+        products = await productCollection.find({ brandId }).toArray();
+        return res.send(products);
+      } catch (error) {
+        console.error(error);
+        return res.sendStatus(500);
+      }
+    });
+
+    app.get("/my-products", verifyJWT, async (req, res) => {
       try {
         const uid = req.query.uid;
         if (uid !== req.decoded.uid) return res.sendStatus(403);
@@ -98,6 +145,29 @@ async function run() {
         return res.sendStatus(400);
       }
     });
+
+    app.delete("/products", verifyJWT, async (req, res) => {
+      try {
+        const id = req.query.id;
+        const uid = req.query.uid;
+        console.log(id, uid);
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const product = await productCollection
+          .find({ _id: ObjectId(id) })
+          .toArray();
+
+        if (product.length === 0) return res.sendStatus(404);
+
+        if (product[0].sellerId !== uid) return res.sendStatus(403);
+
+        const result = await productCollection.deleteOne({ _id: ObjectId(id) });
+
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
     /************** PRODUCTS END **************/
   } finally {
   }
@@ -120,7 +190,7 @@ app.post("/get-access-token", (req, res) => {
 
 function verifyJWT(req, res, next) {
   const authHeader = req.headers.authorization;
-  console.log(authHeader);
+  // console.log(authHeader);
   const token = authHeader && authHeader.split(" ")[1];
   if (token === null) return res.sendStatus(401);
 
