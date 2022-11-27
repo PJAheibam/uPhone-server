@@ -39,6 +39,26 @@ async function run() {
     /******************* BRANDS END *******************/
 
     /************* USERS START *************/
+    app.get("/users", verifyJWT, async (req, res) => {
+      try {
+        const userId = req.query.uid;
+        if (userId !== req.decoded.uid) return res.sendStatus(403);
+
+        const user = await userCollection.find({ uid: userId }).toArray();
+
+        if (user.length === 0 || user[0].role !== "admin")
+          return res.sendStatus(401);
+
+        const users = await userCollection
+          .find({ uid: { $ne: userId } })
+          .toArray();
+
+        res.send(users);
+      } catch (err) {
+        return res.sendStatus(500);
+      }
+    });
+
     app.post("/users", async (req, res) => {
       try {
         const user = req.body;
