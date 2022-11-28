@@ -22,6 +22,9 @@ async function run() {
     const brandCollection = client.db("uPhone").collection("brands");
     const userCollection = client.db("uPhone").collection("users");
     const productCollection = client.db("uPhone").collection("products");
+    const deletedUserCollection = client
+      .db("uPhone")
+      .collection("deletedUsers");
 
     /****************** BRANDS START ******************/
 
@@ -39,6 +42,27 @@ async function run() {
     /******************* BRANDS END *******************/
 
     /************* USERS START *************/
+    //this will get public user info
+    app.get("/users/:id", async (req, res) => {
+      try {
+        const uid = req.params.id;
+        const user = await userCollection.find({ uid }).toArray();
+
+        if (user.length === 0) return res.sendStatus(404);
+        // console.log(user);
+        const data = {
+          fullName: user[0].fullName,
+          email: user[0].email,
+          photoURL: user[0].profilePhoto.thumb_url,
+          verified: user[0].verified,
+        };
+        // console.log(data);
+        return res.send(data);
+      } catch (error) {
+        res.sendStatus(500);
+      }
+    });
+
     app.get("/users", verifyJWT, async (req, res) => {
       try {
         const userId = req.query.uid;
@@ -75,6 +99,7 @@ async function run() {
           fullName: user.fullName,
           email: user.email,
           role: user.role,
+          profilePhoto: user.profilePhoto,
         };
 
         await userCollection.insertOne(document);
@@ -85,14 +110,64 @@ async function run() {
       }
     });
 
+    app.patch("/users/:id", verifyJWT, async (req, res) => {
+      try {
+        const targetId = req.params.id;
+        const uid = req.query.uid;
+        const payload = req.body;
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const result = await userCollection.updateOne(
+          { uid: targetId },
+          {
+            $set: { ...payload },
+          }
+        );
+        // console.log(result);
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+
     app.get("/user-role", verifyJWT, async (req, res) => {
       try {
         const uid = req.query.uid;
+
+        console.log(uid, req.decoded);
+        // console.log(uid, req.decoded);
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
         const user = await userCollection.find({ uid }).toArray();
 
         return res.send({ role: user[0].role });
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+
+    app.delete("/users/:id", verifyJWT, async (req, res) => {
+      try {
+        const uid = req.params.id;
+        const adminId = req.query.uid;
+
+        // console.log(uid, adminId);
+
+        if (adminId !== req.decoded.uid) return req.sendStatus(403);
+
+        const targetUser = await userCollection.find({ uid }).toArray();
+
+        if (targetUser.length === 0) return res.sendStatus(404);
+
+        const doc = targetUser[0];
+
+        delete doc._id;
+
+        const deleteUserDbRes = await deletedUserCollection.insertOne(doc);
+
+        const deleteResponse = await userCollection.deleteOne({ uid });
+
+        return res.send(deleteResponse);
       } catch (error) {
         return res.sendStatus(500);
       }
@@ -120,6 +195,7 @@ async function run() {
     app.get("/my-products", verifyJWT, async (req, res) => {
       try {
         const uid = req.query.uid;
+        // console.log(uid, req.decoded);
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
         const products = await productCollection
@@ -128,7 +204,7 @@ async function run() {
 
         return res.send(products);
       } catch (err) {
-        res.sendStatus(500); // Internal server error;
+        return res.sendStatus(500); // Internal server error;
       }
     });
 
@@ -145,10 +221,9 @@ async function run() {
             moreDetails: data.moreDetails,
             sellingPrice: data.sellingPrice,
             originalPrice: data.originalPrice,
-            meetUpLocation: data.meetUpLocation,
+            location: data.location,
             brand: data.brand,
             brandId: data.brandId,
-            sellerEmail: data.email,
             sellerId: data.uid,
             status: "available",
             advertise: false,
@@ -156,7 +231,7 @@ async function run() {
             sellerImg: data.sellerImg,
           };
           const response = await productCollection.insertOne(doc);
-          console.log("Line-71", response);
+          // console.log("Line-71", response);
           return res.send(response);
         }
         //if user is neither seller nor admin
@@ -171,7 +246,7 @@ async function run() {
       try {
         const id = req.query.id;
         const uid = req.query.uid;
-        console.log(id, uid);
+        // console.log(id, uid);
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
         const product = await productCollection
@@ -204,7 +279,9 @@ app.post("/get-access-token", (req, res) => {
     email: user.email,
   };
 
-  const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET);
+  // console.log(payload);
+
+  const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET);
 
   res.send({ accessToken });
 });
@@ -214,6 +291,8 @@ function verifyJWT(req, res, next) {
   // console.log(authHeader);
   const token = authHeader && authHeader.split(" ")[1];
   if (token === null) return res.sendStatus(401);
+
+  console.log(token);
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
     if (error) return res.sendStatus(403);
