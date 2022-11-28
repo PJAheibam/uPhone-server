@@ -59,6 +59,7 @@ async function run() {
         // console.log(data);
         return res.send(data);
       } catch (error) {
+        console.log(error);
         res.sendStatus(500);
       }
     });
@@ -134,8 +135,8 @@ async function run() {
       try {
         const uid = req.query.uid;
 
-        console.log(uid, req.decoded);
         // console.log(uid, req.decoded);
+
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
         const user = await userCollection.find({ uid }).toArray();
@@ -292,7 +293,7 @@ function verifyJWT(req, res, next) {
   const token = authHeader && authHeader.split(" ")[1];
   if (token === null) return res.sendStatus(401);
 
-  console.log(token);
+  // console.log(token);
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
     if (error) return res.sendStatus(403);
