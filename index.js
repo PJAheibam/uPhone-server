@@ -22,6 +22,8 @@ async function run() {
     const brandCollection = client.db("uPhone").collection("brands");
     const userCollection = client.db("uPhone").collection("users");
     const productCollection = client.db("uPhone").collection("products");
+    const bookingCollection = client.db("uPhone").collection("bookings");
+
     const deletedUserCollection = client
       .db("uPhone")
       .collection("deletedUsers");
@@ -245,6 +247,18 @@ async function run() {
       }
     });
 
+    // app.patch("/products/:id", verifyJWT, async (req, res) => {
+    //   try {
+    //     const id = req.params.id
+    //     const product = await productCollection.find({_id: ObjectId(id)}).toArray();
+
+    //     if(product.length===0) return res.sendStatus(400);
+
+    //   } catch (error) {
+
+    //   }
+    // });
+
     app.delete("/products", verifyJWT, async (req, res) => {
       try {
         const id = req.query.id;
@@ -268,6 +282,47 @@ async function run() {
       }
     });
     /************** PRODUCTS END **************/
+
+    /************ Bookings START ************/
+    app.post("/bookings", verifyJWT, async (req, res) => {
+      try {
+        const payload = req.body;
+
+        // console.log("line 289: ", payload);
+
+        if (payload.buyerId !== req.decoded.uid) return res.sendStatus(403);
+
+        const product = await productCollection
+          .find({ _id: ObjectId(payload.productId) })
+          .toArray();
+
+        if (product.length === 0) return res.sendStatus(400);
+
+        const changeStatus = await productCollection.updateOne(
+          { _id: ObjectId(payload.productId) },
+          {
+            $set: {
+              status: "booked",
+            },
+          }
+        );
+
+        // console.log("line-306: ", changeStatus);
+
+        const result = await bookingCollection.insertOne({
+          productId: payload.productId,
+          sellerId: payload.sellerId,
+          buyerId: payload.buyerId,
+          buyerPhoneNumber: payload.buyerPhoneNumber,
+          meetUpLocation: payload.meetUpLocation,
+        });
+
+        return res.sendStatus(202);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+    /************* Bookings End *************/
   } finally {
   }
 }
