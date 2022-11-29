@@ -229,7 +229,9 @@ async function run() {
             status: "available",
             advertise: false,
             postedOn: data.postedOn,
-            sellerImg: data.sellerImg,
+            // sellerImg: data.sellerImg,
+            condition: data.condition,
+            purchaseYear: data.purchaseYear,
           };
           const response = await productCollection.insertOne(doc);
           // console.log("Line-71", response);
