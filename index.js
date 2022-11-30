@@ -416,7 +416,7 @@ async function run() {
         const payload = req.body;
         const uid = req.query.uid;
 
-        console.log(id, payload);
+        // console.log(id, payload);
 
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
