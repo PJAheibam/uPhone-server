@@ -247,17 +247,16 @@ async function run() {
       }
     });
 
-    // app.patch("/products/:id", verifyJWT, async (req, res) => {
-    //   try {
-    //     const id = req.params.id
-    //     const product = await productCollection.find({_id: ObjectId(id)}).toArray();
+    app.patch("/products/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const product = await productCollection
+          .find({ _id: ObjectId(id) })
+          .toArray();
 
-    //     if(product.length===0) return res.sendStatus(400);
-
-    //   } catch (error) {
-
-    //   }
-    // });
+        if (product.length === 0) return res.sendStatus(400);
+      } catch (error) {}
+    });
 
     app.delete("/products", verifyJWT, async (req, res) => {
       try {
@@ -310,7 +309,7 @@ async function run() {
         // console.log("line-306: ", changeStatus);
 
         const result = await bookingCollection.insertOne({
-          productId: payload.productId,
+          productId: ObjectId(payload.productId),
           sellerId: payload.sellerId,
           buyerId: payload.buyerId,
           buyerPhoneNumber: payload.buyerPhoneNumber,
@@ -319,6 +318,59 @@ async function run() {
 
         return res.sendStatus(202);
       } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+
+    app.get("/bookings", async (req, res) => {
+      try {
+        const uid = req.query.uid;
+
+        // const bookings = await bookingCollection
+        //   .find({ buyerId: uid })
+        //   .toArray();
+        // const products =
+        const result = await bookingCollection
+          .aggregate([
+            {
+              $match: { buyerId: uid },
+            },
+            {
+              $lookup: {
+                from: "products",
+                localField: "productId",
+                foreignField: "_id",
+                as: "product",
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "sellerId",
+                foreignField: "uid",
+                as: "seller",
+              },
+            },
+            {
+              $project: {
+                _id: 1,
+                buyerPhoneNumber: 1,
+                meetUpLocation: 1,
+                productId: 1,
+                "product.name": 1,
+                "product.images": 1,
+                "product.sellingPrice": 1,
+                "product.status": 1,
+                "seller.fullName": 1,
+                "seller.email": 1,
+                "seller.profilePhoto.display_url": 1,
+              },
+            },
+          ])
+          .toArray();
+        return res.send(result);
+      } catch (err) {
+        console.log(err);
         return res.sendStatus(500);
       }
     });
@@ -369,3 +421,47 @@ app.get("/", (_req, res) => {
 app.listen(port, () =>
   console.log("uPhone server is running successfully on port ", port)
 );
+
+/*
+
+.aggregate([
+          {
+            $lookup: {
+              from: "bookings",
+              localField: "name",
+              foreignField: "treatmentName",
+              pipeline: [
+                {
+                  $match: { $expr: { $eq: ["$date", date] } },
+                },
+              ],
+              as: "booked",
+            },
+          },
+          {
+            $project: {
+              name: 1,
+              slots: 1,
+              price: 1,
+              booked: {
+                $map: {
+                  input: "$booked",
+                  as: "book",
+                  in: "$$book.slot",
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              name: 1,
+              price: 1,
+              slots: {
+                $setDifference: ["$slots", "$booked"],
+              },
+            },
+          },
+        ])
+        .toArray();
+
+*/
