@@ -409,6 +409,31 @@ async function run() {
         return res.sendStatus(500);
       }
     });
+
+    app.patch("/bookings/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const payload = req.body;
+        const uid = req.query.uid;
+
+        console.log(id, payload);
+
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const result = await bookingCollection.updateOne(
+          { _id: ObjectId(id) },
+          {
+            $set: {
+              ...payload,
+            },
+          }
+        );
+        // console.log(result);
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
     /************* Bookings End *************/
 
     /************* REPORTS START *************/
@@ -494,18 +519,23 @@ async function run() {
 
     /************** PAYMENT **************/
     // creating stripe payment intent
-    app.post("/create-payment-intent", async (req, res) => {
-      const price = req.body.price * 100;
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+      try {
+        const price = req.body.price * 100;
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: price,
-        currency: "usd",
-        payment_method_types: ["card"],
-      });
+        // console.log(price);
+        if (!price) return res.sendStatus(400);
 
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: price,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        // console.log(paymentIntent.client_secret);
+        return res.send(paymentIntent.client_secret);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
     });
   } finally {
   }
