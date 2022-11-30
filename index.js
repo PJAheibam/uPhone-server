@@ -23,6 +23,7 @@ async function run() {
     const userCollection = client.db("uPhone").collection("users");
     const productCollection = client.db("uPhone").collection("products");
     const bookingCollection = client.db("uPhone").collection("bookings");
+    const reportCollection = client.db("uPhone").collection("reports");
 
     const deletedUserCollection = client
       .db("uPhone")
@@ -181,9 +182,14 @@ async function run() {
     app.get("/products", async (req, res) => {
       try {
         const brandId = req.query.brandId;
+        const userId = req.query.uid;
         let products = [];
         if (brandId === "all") {
-          products = await productCollection.find({}).toArray();
+          const query = {
+            // status: "available",
+            // sellerId: { $ne: userId },
+          };
+          products = await productCollection.find(query).toArray();
           return res.send(products);
         }
 
@@ -191,6 +197,19 @@ async function run() {
         return res.send(products);
       } catch (error) {
         console.error(error);
+        return res.sendStatus(500);
+      }
+    });
+
+    app.get("/ad-products", async (req, res) => {
+      try {
+        const products = await productCollection
+          .find({
+            advertise: true,
+          })
+          .toArray();
+        return res.send(products);
+      } catch (error) {
         return res.sendStatus(500);
       }
     });
@@ -250,12 +269,23 @@ async function run() {
     app.patch("/products/:id", verifyJWT, async (req, res) => {
       try {
         const id = req.params.id;
+        const payload = req.body;
         const product = await productCollection
           .find({ _id: ObjectId(id) })
           .toArray();
 
         if (product.length === 0) return res.sendStatus(400);
-      } catch (error) {}
+
+        const result = await productCollection.updateOne(
+          { _id: ObjectId(id) },
+          {
+            $set: { ...payload },
+          }
+        );
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
     });
 
     app.delete("/products", verifyJWT, async (req, res) => {
@@ -314,6 +344,7 @@ async function run() {
           buyerId: payload.buyerId,
           buyerPhoneNumber: payload.buyerPhoneNumber,
           meetUpLocation: payload.meetUpLocation,
+          paymentStatus: false,
         });
 
         return res.sendStatus(202);
@@ -357,6 +388,7 @@ async function run() {
                 buyerPhoneNumber: 1,
                 meetUpLocation: 1,
                 productId: 1,
+                paymentStatus: 1,
                 "product.name": 1,
                 "product.images": 1,
                 "product.sellingPrice": 1,
@@ -375,6 +407,25 @@ async function run() {
       }
     });
     /************* Bookings End *************/
+
+    /************* REPORTS START *************/
+    app.post("/reports", verifyJWT, async (req, res) => {
+      try {
+        const payload = req.body;
+        if (payload.reporterId !== req.decoded.uid) return res.sendStatus(403);
+        // console.log(payload);
+        const doc = {
+          productId: payload.productId,
+          reporterId: payload.reporterId,
+          reason: payload.reason,
+        };
+        const result = await reportCollection.insertOne(doc);
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+    /************** REPORTS END **************/
   } finally {
   }
 }
@@ -421,47 +472,3 @@ app.get("/", (_req, res) => {
 app.listen(port, () =>
   console.log("uPhone server is running successfully on port ", port)
 );
-
-/*
-
-.aggregate([
-          {
-            $lookup: {
-              from: "bookings",
-              localField: "name",
-              foreignField: "treatmentName",
-              pipeline: [
-                {
-                  $match: { $expr: { $eq: ["$date", date] } },
-                },
-              ],
-              as: "booked",
-            },
-          },
-          {
-            $project: {
-              name: 1,
-              slots: 1,
-              price: 1,
-              booked: {
-                $map: {
-                  input: "$booked",
-                  as: "book",
-                  in: "$$book.slot",
-                },
-              },
-            },
-          },
-          {
-            $project: {
-              name: 1,
-              price: 1,
-              slots: {
-                $setDifference: ["$slots", "$booked"],
-              },
-            },
-          },
-        ])
-        .toArray();
-
-*/
