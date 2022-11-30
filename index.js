@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { application } = require("express");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -70,6 +71,7 @@ async function run() {
     app.get("/users", verifyJWT, async (req, res) => {
       try {
         const userId = req.query.uid;
+        const role = req.query.role;
         if (userId !== req.decoded.uid) return res.sendStatus(403);
 
         const user = await userCollection.find({ uid: userId }).toArray();
@@ -78,7 +80,7 @@ async function run() {
           return res.sendStatus(401);
 
         const users = await userCollection
-          .find({ uid: { $ne: userId } })
+          .find({ uid: { $ne: userId }, role })
           .toArray();
 
         res.send(users);
@@ -415,11 +417,73 @@ async function run() {
         if (payload.reporterId !== req.decoded.uid) return res.sendStatus(403);
         // console.log(payload);
         const doc = {
-          productId: payload.productId,
-          reporterId: payload.reporterId,
+          productId: ObjectId(payload.productId),
+          reporterId: payload.reporterId, //firebase uid
           reason: payload.reason,
         };
         const result = await reportCollection.insertOne(doc);
+        return res.send(result);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+
+    app.get("/reports", verifyJWT, async (req, res) => {
+      try {
+        const admin = await userCollection
+          .find({ uid: req.decoded.uid })
+          .toArray();
+        if (admin.length === 0) return res.sendStatus(401);
+        if (admin[0].role !== "admin") return res.sendStatus(403);
+
+        const reports = await reportCollection
+          .aggregate([
+            {
+              $lookup: {
+                from: "products",
+                localField: "productId",
+                foreignField: "_id",
+                as: "product",
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "reporterId",
+                foreignField: "uid",
+                as: "reporter",
+              },
+            },
+          ])
+          .toArray();
+
+        return res.send(reports);
+      } catch (error) {
+        return res.sendStatus(500);
+      }
+    });
+
+    app.delete("/reports", verifyJWT, async (req, res) => {
+      try {
+        const id = req.query.id;
+        const uid = req.query.uid;
+        // console.log(id, uid);
+        if (uid !== req.decoded.uid) return res.sendStatus(403);
+
+        const report = await reportCollection
+          .find({ _id: ObjectId(id) })
+          .toArray();
+
+        if (report.length === 0) return res.sendStatus(404);
+
+        const admin = await userCollection.find({ uid }).toArray();
+
+        if (admin.length === 0) return res.sendStatus(401);
+
+        if (admin[0].role !== "admin") return res.sendStatus(403);
+
+        const result = await reportCollection.deleteOne({ _id: ObjectId(id) });
+
         return res.send(result);
       } catch (error) {
         return res.sendStatus(500);
