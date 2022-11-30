@@ -189,7 +189,7 @@ async function run() {
         let products = [];
         if (brandId === "all") {
           const query = {
-            // status: "available",
+            status: "available",
             // sellerId: { $ne: userId },
           };
           products = await productCollection.find(query).toArray();
@@ -208,6 +208,7 @@ async function run() {
       try {
         const products = await productCollection
           .find({
+            status: "available",
             advertise: true,
           })
           .toArray();
