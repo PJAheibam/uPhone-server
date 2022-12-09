@@ -1,5 +1,7 @@
 # uPhone Server
 
+[see client side code](https://github.com/prosenjit-singha/uPhone-client)
+
 ## Features
 
 - JWT implemented

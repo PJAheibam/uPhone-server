@@ -69,11 +69,13 @@ async function run() {
       }
     });
 
-    app.get("/users", verifyJWT, async (req, res) => {
+    app.get("/users", async (req, res) => {
       try {
         const userId = req.query.uid;
+
         const role = req.query.role;
-        if (userId !== req.decoded.uid) return res.sendStatus(403);
+
+        // if (userId !== req.decoded.uid) return res.sendStatus(403);
 
         const user = await userCollection.find({ uid: userId }).toArray();
 
@@ -84,8 +86,9 @@ async function run() {
           .find({ uid: { $ne: userId }, role })
           .toArray();
 
-        res.send(users);
+        return res.send(users);
       } catch (err) {
+        // console.log(err);
         return res.sendStatus(500);
       }
     });
@@ -141,14 +144,19 @@ async function run() {
       try {
         const uid = req.query.uid;
 
-        // console.log(uid, req.decoded);
+        console.log(uid, req.decoded.uid);
 
         if (uid !== req.decoded.uid) return res.sendStatus(403);
 
         const user = await userCollection.find({ uid }).toArray();
 
+        // console.log(user);
+
+        if (user.length === 0) return res.send({ role: "buyer" });
+
         return res.send({ role: user[0].role });
       } catch (error) {
+        // console.log(error);
         return res.sendStatus(500);
       }
     });
@@ -568,6 +576,7 @@ function verifyJWT(req, res, next) {
   // console.log(token);
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+    console.log("Error", error);
     if (error) return res.sendStatus(403);
 
     req.decoded = decoded;
